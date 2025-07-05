@@ -1,0 +1,28 @@
+To develop and test the poultry disease classification model efficiently, I created a custom dataset tailored for lightweight experimentation and faster iteration.
+
+Custom Dataset Structure:
+
+My dataset is organized into two primary directories:
+
+train/: Contains 200 images per class
+
+test/: Contains 50 images per class
+
+Google Drive link:
+https://drive.google.com/file/d/1Ot1bzq04Dsxi2e-K1gAPOWyRPZCaAIPx/view?usp=sharing
+
+Scaling Up with the Kaggle Dataset
+For more robust training and higher model performance, we recommend using the full dataset available on Kaggle:
+
+Link: https://www.kaggle.com/datasets/chandrashekarnatesh/poultry-diseases 
+
+📁 Kaggle Dataset Structure
+train/: 100,000 images per class
+
+val/: 10,000 images per class
+
+test/: Remaining images for evaluation
+
+This dataset provides a much larger and more diverse image pool, which can significantly improve model generalization and accuracy in real-world applications.
+
+
