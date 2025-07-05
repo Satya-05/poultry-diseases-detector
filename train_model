@@ -1,0 +1,189 @@
+#Import Necessary Libraries
+import os
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from PIL import Image
+import zipfile
+from google.colab import files
+import tensorflow as tf
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from tensorflow.keras.applications import VGG16
+from tensorflow.keras import layers, models, callbacks
+from sklearn.metrics import confusion_matrix, classification_report
+
+# 1. Data Preparation
+try:
+    uploaded = files.upload()
+    with zipfile.ZipFile("poultry_sample.zip", 'r') as zip_ref:
+        zip_ref.extractall("poultry_data")
+except Exception as e:
+    print(f"Error uploading/extracting dataset: {e}")
+    raise
+
+def find_data_folders(base_path):
+    for root, dirs, _ in os.walk(base_path):
+        if 'train' in dirs and 'test' in dirs:
+            return os.path.join(root, 'train'), os.path.join(root, 'test')
+    raise FileNotFoundError("Could not find train/test folders in extracted data")
+
+train_dir, test_dir = find_data_folders("poultry_data")
+
+# 2. Dataset Analysis
+def analyze_dataset(folder_path):
+    classes = sorted(os.listdir(folder_path))
+    counts = {}
+    for cls in classes:
+        cls_path = os.path.join(folder_path, cls)
+        if os.path.isdir(cls_path):
+            counts[cls] = len(os.listdir(cls_path))
+    
+    plt.figure(figsize=(10, 5))
+    sns.barplot(x=list(counts.keys()), y=list(counts.values()), palette="viridis")
+    plt.title(f"Class Distribution in {os.path.basename(folder_path)}")
+    plt.xticks(rotation=45)
+    plt.ylabel("Number of Images")
+    plt.show()
+    return counts
+
+print("\n=== Training Set ===")
+train_counts = analyze_dataset(train_dir)
+print("\n=== Test Set ===")
+test_counts = analyze_dataset(test_dir)
+
+# 3. Data Pipeline
+IMG_SIZE = (224, 224)
+BATCH_SIZE = 32
+train_datagen = ImageDataGenerator(
+    rescale=1./255,
+    rotation_range=25,
+    width_shift_range=0.2,
+    height_shift_range=0.2,
+    shear_range=0.2,
+    zoom_range=0.2,
+    horizontal_flip=True,
+    fill_mode='nearest',
+    validation_split=0.2
+)
+
+test_datagen = ImageDataGenerator(rescale=1./255)
+
+train_gen = train_datagen.flow_from_directory(
+    train_dir,
+    target_size=IMG_SIZE,
+    batch_size=BATCH_SIZE,
+    class_mode='categorical',
+    subset='training',
+    shuffle=True
+)
+
+val_gen = train_datagen.flow_from_directory(
+    train_dir,
+    target_size=IMG_SIZE,
+    batch_size=BATCH_SIZE,
+    class_mode='categorical',
+    subset='validation',
+    shuffle=True
+)
+
+test_gen = test_datagen.flow_from_directory(
+    test_dir,
+    target_size=IMG_SIZE,
+    batch_size=BATCH_SIZE,
+    class_mode='categorical',
+    shuffle=False
+)
+
+# 4. Model Building
+base_model = VGG16(weights='imagenet', include_top=False, input_shape=(224, 224, 3))
+base_model.trainable = False
+
+model = models.Sequential([
+    base_model,
+    layers.Flatten(),
+    layers.Dense(512, activation='relu'),
+    layers.Dropout(0.5),
+    layers.Dense(256, activation='relu'),
+    layers.Dropout(0.3),
+    layers.Dense(len(train_gen.class_indices), activation='softmax')
+])
+
+model.compile(
+    optimizer=tf.keras.optimizers.Adam(learning_rate=0.0001),
+    loss='categorical_crossentropy',
+    metrics=['accuracy']
+)
+
+# 5. Training
+early_stopping = callbacks.EarlyStopping(
+    monitor='val_loss',
+    patience=5,
+    restore_best_weights=True
+)
+
+model_checkpoint = callbacks.ModelCheckpoint(
+    'best_poultry_model.h5',
+    monitor='val_accuracy',
+    save_best_only=True,
+    mode='max'
+)
+
+reduce_lr = callbacks.ReduceLROnPlateau(
+    monitor='val_loss',
+    factor=0.2,
+    patience=3,
+    min_lr=1e-6
+)
+
+history = model.fit(
+    train_gen,
+    epochs=20,
+    validation_data=val_gen,
+    callbacks=[early_stopping, model_checkpoint, reduce_lr],
+    verbose=1
+)
+
+# 6. Evaluation
+try:
+    model = models.load_model('best_poultry_model.h5')
+except FileNotFoundError:
+    print("Error: best_poultry_model.h5 not found. Training may have failed.")
+    raise
+
+test_preds = np.argmax(model.predict(test_gen), axis=1)
+test_true = test_gen.classes
+class_names = list(test_gen.class_indices.keys())
+
+print("\n=== Classification Report ===")
+print(classification_report(test_true, test_preds, target_names=class_names, digits=4))
+
+plt.figure(figsize=(8, 6))
+cm = confusion_matrix(test_true, test_preds)
+sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
+            xticklabels=class_names, yticklabels=class_names)
+plt.title('Confusion Matrix')
+plt.xlabel('Predicted Labels')
+plt.ylabel('True Labels')
+plt.show()
+
+# 7. Training History
+plt.figure(figsize=(10, 4))
+plt.subplot(1, 2, 1)
+plt.plot(history.history['loss'], label='Train Loss')
+plt.plot(history.history['val_loss'], label='Val Loss')
+plt.title('Training vs Validation Loss')
+plt.xlabel('Epochs')
+plt.ylabel('Loss')
+plt.legend()
+
+plt.subplot(1, 2, 2)
+plt.plot(history.history['accuracy'], label='Train Accuracy')
+plt.plot(history.history['val_accuracy'], label='Val Accuracy')
+plt.title('Training vs Validation Accuracy')
+plt.xlabel('Epochs')
+plt.ylabel('Accuracy')
+plt.legend()
+plt.tight_layout()
+plt.show()
+
+print("\n✅ Model saved as 'best_poultry_model.h5'")
