@@ -1,1 +1,76 @@
-
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Poultry Disease Detector</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>🐔 Poultry Disease Classifier</h1>
+        
+        <div class="upload-section">
+            <form action="{{ url_for('upload_file') }}" method="post" enctype="multipart/form-data">
+                <div class="file-input-wrapper">
+                    <label for="fileInput" class="file-input-label">Click to Upload Poultry Image</label>
+                    <input type="file" id="fileInput" name="file" accept="image/*" required>
+                    {% if filename %}
+                    <div class="file-info" id="fileInfo">Selected: {{ filename }}</div>
+                    {% else %}
+                    <div class="file-info" id="fileInfo">No file selected</div>
+                    {% endif %}
+                </div>
+                <button type="submit" {% if not filename %}disabled{% endif %}>Analyze Image</button>
+            </form>
+        </div>
+        
+        {% if error %}
+        <div class="alert" id="errorContainer">{{ error }}</div>
+        {% else %}
+        <div class="alert" id="errorContainer"></div>
+        {% endif %}
+        
+        {% if loading %}
+        <div class="loading" id="loadingIndicator">
+            <div class="spinner"></div>
+            <p>Analyzing image...</p>
+        </div>
+        {% else %}
+        <div class="loading" id="loadingIndicator"></div>
+        {% endif %}
+        
+        <div class="result-section" id="resultContainer">
+            <h2 class="result-header">🔍 Analysis Results</h2>
+            {% if image_path %}
+            <img id="previewImage" class="image-preview" src="{{ image_path }}" alt="Uploaded poultry image">
+            {% else %}
+            <img id="previewImage" class="image-preview" src="#" alt="Uploaded poultry image">
+            {% endif %}
+            
+            {% if result %}
+            <div class="prediction-card">
+                <div class="prediction-row">
+                    <span class="prediction-label">Diagnosis:</span>
+                    <span id="diseasePrediction" class="{{ result.colorClass }}">{{ result.name }}</span>
+                </div>
+                <div class="prediction-row">
+                    <span class="prediction-label">Confidence:</span>
+                    <span id="confidenceScore">{{ result.confidence }}</span>
+                </div>
+            </div>
+            
+            <div class="disease-info {{ result.bgClass }}" id="diseaseInfo">
+                <p id="verificationText">✅ <strong>Diagnosis confirmed:</strong> <span class="{{ result.colorClass }}">{{ result.name }}</span></p>
+                <p><strong>Key Symptoms Identified:</strong></p>
+                <ul class="symptoms-list" id="symptomsList">
+                    {% for symptom in result.symptoms %}
+                    <li>{{ symptom }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</body>
+</html>
